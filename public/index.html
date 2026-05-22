@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>UPSC Prelims Scorer — Compare Marks Across Coaching Keys</title>
+<meta name="description" content="Enter your UPSC Prelims answers. Instant scores against 8+ coaching answer keys. Subject-wise breakdown, disputed questions, cut-off prediction.">
+<script src="https://cdn.tailwindcss.com"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script>
+tailwind.config={theme:{extend:{fontFamily:{sans:['Inter','sans-serif']},colors:{
+  pri:{50:'#eef2ff',100:'#e0e7ff',500:'#6366f1',600:'#4f46e5',700:'#4338ca'},
+  ok:{50:'#f0fdfa',400:'#2dd4bf',500:'#14b8a6',600:'#0d9488'},
+  bad:{50:'#fff1f2',400:'#fb7185',500:'#f43f5e',600:'#e11d48'},
+  warn:{50:'#fffbeb',400:'#fbbf24',500:'#f59e0b',600:'#d97706'},
+  bg:'#fafaf9',card:'#ffffff',border:'#e5e7eb',muted:'#6b7280',heading:'#111827'
+}}}}
+</script>
+<style>
+[x-cloak]{display:none!important}
+body{font-family:'Inter',sans-serif;background:#fafaf9;color:#374151}
+.fade-in{animation:fadeIn .3s ease-out}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.opt-btn{width:42px;height:42px;border-radius:50%;border:2px solid #d1d5db;display:inline-flex;align-items:center;justify-content:center;font-weight:600;font-size:14px;cursor:pointer;transition:all .15s;color:#6b7280;background:#fff}
+.opt-btn:hover{border-color:#6366f1;color:#4f46e5;background:#eef2ff}
+.opt-btn.picked{border-color:#4f46e5;background:#4f46e5;color:#fff;box-shadow:0 2px 8px rgba(79,70,229,.3)}
+.opt-btn.clear-btn{border-color:#e5e7eb;width:32px;height:32px;font-size:11px;color:#9ca3af}
+.opt-btn.clear-btn:hover{border-color:#f43f5e;color:#f43f5e;background:#fff1f2}
+.score-card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:20px;transition:all .2s}
+.score-card:hover{border-color:#6366f1;box-shadow:0 4px 16px rgba(99,102,241,.08)}
+.dispute-ring{box-shadow:0 0 0 2px rgba(245,158,11,.25)}
+</style>
+</head>
+<body x-data="scorer()" x-cloak>
+
+<!-- ==================== SCREEN 1: REGISTRATION ==================== -->
+<div x-show="screen===1" class="min-h-screen flex flex-col items-center justify-center px-4 py-8 fade-in">
+  <div class="w-full max-w-md">
+    <!-- Logo -->
+    <div class="text-center mb-8">
+      <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-pri-600 text-white font-extrabold text-xl mb-4">U</div>
+      <h1 class="text-2xl font-extrabold text-heading">UPSC Prelims Scorer</h1>
+      <p class="text-sm text-muted mt-1">Compare your marks across 8+ coaching answer keys</p>
+    </div>
+
+    <!-- Form Card -->
+    <div class="bg-card rounded-2xl border border-border shadow-sm p-6">
+      <!-- Paper -->
+      <label class="block text-xs font-semibold text-muted uppercase tracking-wider mb-2">Paper</label>
+      <div class="grid grid-cols-2 gap-2 mb-5">
+        <button @click="paper='gs1'" :class="paper==='gs1'?'bg-pri-600 text-white border-pri-600':'bg-white text-heading border-border hover:border-pri-500'" class="py-3 rounded-xl border-2 font-bold text-sm transition-all">
+          GS Paper I <span class="block text-[10px] font-normal opacity-70">100 Qs · Merit Ranking</span>
+        </button>
+        <button @click="paper='csat'" :class="paper==='csat'?'bg-pri-600 text-white border-pri-600':'bg-white text-heading border-border hover:border-pri-500'" class="py-3 rounded-xl border-2 font-bold text-sm transition-all">
+          CSAT Paper II <span class="block text-[10px] font-normal opacity-70">80 Qs · Qualifying (33%)</span>
+        </button>
+      </div>
+
+      <!-- Set -->
+      <label class="block text-xs font-semibold text-muted uppercase tracking-wider mb-2">Question Paper Set</label>
+      <div class="grid grid-cols-4 gap-2 mb-5">
+        <template x-for="s in ['A','B','C','D']" :key="s">
+          <button @click="setCode=s" :class="setCode===s?'bg-pri-600 text-white border-pri-600':'bg-white text-heading border-border hover:border-pri-500'" class="py-2.5 rounded-xl border-2 font-bold text-sm transition-all" x-text="'Set '+s"></button>
+        </template>
+      </div>
+
+      <!-- Email -->
+      <label class="block text-xs font-semibold text-muted uppercase tracking-wider mb-2">Email Address</label>
+      <input type="email" x-model="userEmail" placeholder="your@email.com" required
+        class="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-pri-500 focus:ring-2 focus:ring-pri-100 transition-all mb-1">
+      <p class="text-[10px] text-muted mb-5">Used only to link your submission. Never shared or displayed publicly.</p>
+
+      <!-- Category -->
+      <label class="block text-xs font-semibold text-muted uppercase tracking-wider mb-2">Category</label>
+      <select x-model="selectedCategory" class="w-full bg-white border border-border rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-pri-500 focus:ring-2 focus:ring-pri-100 transition-all mb-1">
+        <template x-for="cat in categories" :key="cat.value">
+          <option :value="cat.value" x-text="cat.label"></option>
+        </template>
+      </select>
+      <p class="text-[10px] text-muted mb-5">Used solely to predict per-category cutoffs. Stored anonymously, never used for identification.</p>
+
+      <!-- Disclaimer -->
+      <div class="bg-warn-50 border border-warn-400/30 rounded-xl p-3 mb-6">
+        <p class="text-xs text-warn-600 leading-relaxed"><span class="font-bold">For accurate cutoff prediction:</span> Please enter only the answers you actually marked in the exam. Speculative or practice answers will skew the community estimate.</p>
+      </div>
+
+      <!-- Start Button -->
+      <button @click="startAnswering()" :disabled="!userEmail"
+        class="w-full py-3.5 rounded-xl bg-pri-600 text-white font-bold text-sm hover:bg-pri-700 transition-all disabled:opacity-30 disabled:cursor-not-allowed shadow-lg shadow-pri-600/20">
+        Start Answering →
+      </button>
+    </div>
+
+    <!-- Telegram Links -->
+    <div class="text-center mt-6 space-y-1">
+      <a href="https://t.me/upsc_scorer_updates" target="_blank" rel="noopener" class="text-xs text-pri-600 hover:text-pri-700 hover:underline block">Join @upsc_scorer_updates for cutoff predictions</a>
+      <a href="https://t.me/upsc_scorer_bot" target="_blank" rel="noopener" class="text-xs text-muted hover:text-pri-600 hover:underline block">Questions? Message @upsc_scorer_bot</a>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== SCREEN 2: ANSWER GRID ==================== -->
+<div x-show="screen===2" class="fade-in">
+  <!-- Sticky Header -->
+  <header class="sticky top-0 z-50 bg-bg/95 backdrop-blur border-b border-border">
+    <div class="max-w-3xl mx-auto px-4 py-3">
+      <div class="flex items-center justify-between mb-2">
+        <button @click="screen=1" class="text-xs text-muted hover:text-pri-600 transition-colors">← Back</button>
+        <span class="text-xs font-semibold text-heading"><span x-text="paper==='gs1'?'GS-I':'CSAT'"></span> · Set <span x-text="setCode"></span></span>
+        <span class="text-xs text-muted"><span class="text-pri-600 font-bold" x-text="answeredCount"></span>/<span x-text="totalQs"></span></span>
+      </div>
+      <div class="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+        <div class="h-full bg-pri-600 rounded-full transition-all duration-300" :style="`width:${answeredCount/totalQs*100}%`"></div>
+      </div>
+    </div>
+    <!-- Page Tabs -->
+    <div class="max-w-3xl mx-auto px-4 pb-2 flex gap-1.5 overflow-x-auto">
+      <template x-for="(page,idx) in pageRanges" :key="idx">
+        <button @click="currentPage=idx" :class="currentPage===idx?'bg-pri-600 text-white':'bg-white text-muted border border-border hover:border-pri-500'" class="px-3 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap flex-shrink-0 transition-all">
+          <span x-text="page.label"></span>
+        </button>
+      </template>
+    </div>
+  </header>
+
+  <!-- Questions -->
+  <div class="max-w-3xl mx-auto px-4 py-4 space-y-2">
+    <template x-for="q in currentPageQuestions" :key="q">
+      <div :class="isDisputed(q)?'dispute-ring bg-warn-50/50':'bg-card'" class="rounded-xl border border-border p-3 sm:p-4 transition-all">
+        <div class="flex items-center gap-3">
+          <!-- Q Number -->
+          <span class="text-sm font-bold text-muted/50 w-8 text-right flex-shrink-0" x-text="q"></span>
+          <!-- Options -->
+          <div class="flex gap-2.5 flex-shrink-0">
+            <template x-for="opt in ['A','B','C','D']" :key="opt">
+              <button @click="toggleAnswer(q,opt)" :class="getAnswer(q)===opt?'picked':''" class="opt-btn" x-text="opt"></button>
+            </template>
+            <button @click="clearAnswer(q)" :class="getAnswer(q)?'':'opacity-30 cursor-default'" class="opt-btn clear-btn" title="Clear">✕</button>
+          </div>
+          <!-- Spacer -->
+          <div class="flex-1"></div>
+          <!-- Disputed + Subject (right side) -->
+          <div class="flex items-center gap-2 flex-shrink-0">
+            <span x-show="isDisputed(q)" class="text-[9px] font-bold text-warn-600 bg-warn-50 px-1.5 py-0.5 rounded-md border border-warn-400/30">DISPUTED</span>
+            <span class="text-[10px] text-muted/40 uppercase tracking-wider hidden sm:inline" x-text="getSubject(q)"></span>
+          </div>
+        </div>
+      </div>
+    </template>
+  </div>
+
+  <!-- Bottom Nav -->
+  <div class="sticky bottom-0 bg-bg/95 backdrop-blur border-t border-border">
+    <div class="max-w-3xl mx-auto px-4 py-3 flex justify-between items-center">
+      <button @click="currentPage=Math.max(0,currentPage-1)" :disabled="currentPage===0" class="px-4 py-2 rounded-xl bg-white border border-border text-sm font-medium disabled:opacity-30 hover:border-pri-500 transition-all">← Prev</button>
+      <div class="flex gap-2">
+        <button @click="clearAll()" class="px-3 py-2 rounded-xl bg-white border border-border text-xs text-bad-500 hover:bg-bad-50 transition-all">Clear All</button>
+        <button @click="scoreAndSubmit()" :disabled="answeredCount===0" class="px-5 py-2 rounded-xl bg-pri-600 text-white font-bold text-sm disabled:opacity-30 hover:bg-pri-700 transition-all shadow-md shadow-pri-600/20">Score My Answers →</button>
+      </div>
+      <button @click="currentPage=Math.min(pageRanges.length-1,currentPage+1)" :disabled="currentPage>=pageRanges.length-1" class="px-4 py-2 rounded-xl bg-white border border-border text-sm font-medium disabled:opacity-30 hover:border-pri-500 transition-all">Next →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== SCREEN 3: RESULTS DASHBOARD ==================== -->
+<div x-show="screen===3" class="fade-in">
+  <div class="max-w-4xl mx-auto px-4 py-6">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h2 class="text-xl font-extrabold text-heading">Your Scores</h2>
+        <p class="text-xs text-muted mt-0.5">
+          <span x-text="paper==='gs1'?'GS Paper I':'CSAT'"></span> · Set <span x-text="setCode"></span> ·
+          <span x-text="answeredCount"></span> attempted, <span x-text="totalQs-answeredCount"></span> skipped
+        </p>
+      </div>
+      <button @click="screen=2" class="text-xs text-pri-600 hover:underline">← Edit Answers</button>
+    </div>
+
+    <!-- Submission Status -->
+    <div x-show="submitStatus" class="mb-4 rounded-xl p-3 text-xs font-medium" :class="submitStatus==='saved'?'bg-ok-50 text-ok-600':submitStatus==='saving'?'bg-pri-50 text-pri-600':'bg-bad-50 text-bad-600'">
+      <span x-show="submitStatus==='saving'">Saving your submission...</span>
+      <span x-show="submitStatus==='saved'">✓ Score submitted successfully</span>
+      <span x-show="submitStatus==='error'">Could not save — will retry automatically</span>
+    </div>
+
+    <!-- Score Cards -->
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-8">
+      <template x-for="sc in sortedScores" :key="sc.source">
+        <div class="score-card" :class="sc.is_official?'border-pri-500/50 ring-1 ring-pri-500/20':''">
+          <div class="flex items-start justify-between mb-2">
+            <div class="min-w-0">
+              <h3 class="text-xs font-semibold text-heading truncate" x-text="sc.display_name"></h3>
+              <span x-show="sc.is_official" class="text-[9px] font-bold text-pri-600 uppercase">Official</span>
+            </div>
+            <span class="font-extrabold text-xl ml-2 flex-shrink-0" :class="sc.marks>=getCutoff()?'text-ok-600':'text-heading'" x-text="sc.marks.toFixed(2)"></span>
+          </div>
+          <div class="flex gap-3 text-[11px] text-muted">
+            <span>✓<span class="text-ok-600 font-semibold ml-0.5" x-text="sc.correct"></span></span>
+            <span>✗<span class="text-bad-500 font-semibold ml-0.5" x-text="sc.wrong"></span></span>
+            <span>—<span class="font-semibold ml-0.5" x-text="sc.skipped"></span></span>
+          </div>
+          <div class="mt-2 flex h-1 rounded-full overflow-hidden bg-gray-100">
+            <div class="bg-ok-500" :style="`width:${sc.correct/totalQs*100}%`"></div>
+            <div class="bg-bad-500" :style="`width:${sc.wrong/totalQs*100}%`"></div>
+          </div>
+          <p class="mt-1.5 text-[10px]" :class="sc.marks>=getCutoff()?'text-ok-600':'text-bad-500'">
+            <span x-text="sc.marks>=getCutoff()?'▲ Above':'▼ Below'"></span>
+            <span x-text="selectedCategory.toUpperCase()"></span> cutoff by
+            <span x-text="Math.abs(sc.marks-getCutoff()).toFixed(2)"></span>
+          </p>
+        </div>
+      </template>
+    </div>
+
+    <!-- Category Toggle -->
+    <div class="mb-2 flex items-center gap-2 flex-wrap">
+      <span class="text-xs text-muted">Cutoff category:</span>
+      <template x-for="cat in categories" :key="cat.value">
+        <button @click="selectedCategory=cat.value" :class="selectedCategory===cat.value?'bg-pri-600 text-white':'bg-white text-muted border border-border'" class="px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all" x-text="cat.label"></button>
+      </template>
+    </div>
+    <p class="text-[10px] text-muted/50 mb-6">Category is used solely for cutoff comparison. Never stored publicly.</p>
+
+    <!-- Score Range -->
+    <div class="bg-card border border-border rounded-2xl p-5 mb-6">
+      <h3 class="font-bold text-sm text-heading mb-3">Score Range Across All Keys</h3>
+      <div class="flex items-center gap-5 flex-wrap">
+        <div><span class="text-[10px] text-muted uppercase tracking-wider">Min</span><p class="font-extrabold text-lg text-bad-500" x-text="scoreRange.min.toFixed(2)"></p></div>
+        <div class="h-8 w-px bg-border"></div>
+        <div><span class="text-[10px] text-muted uppercase tracking-wider">Consensus</span><p class="font-extrabold text-lg text-pri-600" x-text="scoreRange.consensus.toFixed(2)"></p></div>
+        <div class="h-8 w-px bg-border"></div>
+        <div><span class="text-[10px] text-muted uppercase tracking-wider">Max</span><p class="font-extrabold text-lg text-ok-600" x-text="scoreRange.max.toFixed(2)"></p></div>
+        <div class="h-8 w-px bg-border"></div>
+        <div><span class="text-[10px] text-muted uppercase tracking-wider">Spread</span><p class="font-extrabold text-lg text-warn-600" x-text="'±'+((scoreRange.max-scoreRange.min)/2).toFixed(2)"></p></div>
+      </div>
+    </div>
+
+    <!-- Subject Breakdown -->
+    <div class="bg-card border border-border rounded-2xl p-5 mb-6">
+      <h3 class="font-bold text-sm text-heading mb-4">Subject-wise Breakdown (Consensus Key)</h3>
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        <template x-for="subj in subjectBreakdown" :key="subj.name">
+          <div class="bg-gray-50 rounded-xl p-3">
+            <div class="flex justify-between items-start mb-2">
+              <span class="text-[10px] text-muted uppercase tracking-wider" x-text="subj.name.replace('_',' ')"></span>
+              <span class="font-bold text-xs text-heading" x-text="subj.correct+'/'+subj.total"></span>
+            </div>
+            <div class="flex h-1 rounded-full overflow-hidden bg-gray-200">
+              <div class="bg-ok-500" :style="`width:${subj.total?subj.correct/subj.total*100:0}%`"></div>
+              <div class="bg-bad-500" :style="`width:${subj.total?subj.wrong/subj.total*100:0}%`"></div>
+            </div>
+            <p class="text-[10px] text-muted mt-1">
+              +<span x-text="(subj.correct*marksCorrect).toFixed(2)"></span>
+              −<span x-text="(subj.wrong*penalty).toFixed(2)"></span>
+              = <span class="font-semibold" x-text="((subj.correct*marksCorrect)-(subj.wrong*penalty)).toFixed(2)"></span>
+            </p>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- Disputed Questions -->
+    <div class="bg-card border border-border rounded-2xl p-5 mb-6">
+      <h3 class="font-bold text-sm text-heading mb-1">Disputed Questions</h3>
+      <p class="text-[10px] text-muted mb-4">Your score could swing by up to <span class="text-warn-600 font-bold" x-text="disputedSwing.toFixed(2)"></span> marks depending on the official key.</p>
+      <div class="space-y-2">
+        <template x-for="dq in disputedDetails" :key="dq.qid">
+          <div class="bg-warn-50/50 rounded-xl p-3 flex items-center gap-3 flex-wrap">
+            <span class="font-bold text-xs text-warn-600 w-8" x-text="'Q'+dq.qid"></span>
+            <span class="text-[11px] px-2 py-0.5 rounded-md" :class="dq.yourAnswer?'bg-pri-100 text-pri-700':'bg-gray-100 text-muted'" x-text="dq.yourAnswer?'You: '+dq.yourAnswer:'Skipped'"></span>
+            <div class="flex gap-1 flex-wrap">
+              <template x-for="(count,opt) in dq.breakdown" :key="opt">
+                <span class="text-[10px] px-1.5 py-0.5 rounded-md border" :class="opt===dq.yourAnswer?'border-pri-500 bg-pri-50 text-pri-700':'border-border bg-white text-muted'" x-text="opt+': '+count+'/'+totalKeys"></span>
+              </template>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- Share CTA -->
+    <div class="bg-pri-50 border border-pri-200 rounded-2xl p-5 text-center mb-6">
+      <h3 class="font-bold text-sm text-heading mb-2">Help more aspirants — share this tool</h3>
+      <div class="flex gap-2 justify-center flex-wrap">
+        <a :href="'https://wa.me/?text='+encodeURIComponent(shareText)" target="_blank" class="px-4 py-2 rounded-xl bg-green-600 text-white text-xs font-bold hover:bg-green-700 transition-all">WhatsApp</a>
+        <a :href="'https://t.me/share/url?url='+encodeURIComponent(shareUrl)+'&text='+encodeURIComponent(shareText)" target="_blank" class="px-4 py-2 rounded-xl bg-blue-500 text-white text-xs font-bold hover:bg-blue-600 transition-all">Telegram</a>
+        <a :href="'https://twitter.com/intent/tweet?text='+encodeURIComponent(shareText)" target="_blank" class="px-4 py-2 rounded-xl bg-gray-900 text-white text-xs font-bold hover:bg-gray-800 transition-all">X / Twitter</a>
+        <button @click="copyLink()" class="px-4 py-2 rounded-xl bg-white border border-border text-xs font-bold text-heading hover:border-pri-500 transition-all" x-text="copied?'Copied!':'Copy Link'"></button>
+      </div>
+    </div>
+
+    <!-- Telegram -->
+    <div class="text-center space-y-1 mb-8">
+      <a href="https://t.me/upsc_scorer_updates" target="_blank" rel="noopener" class="text-xs text-pri-600 hover:underline block">Join @upsc_scorer_updates for cutoff predictions and analysis</a>
+      <a href="https://t.me/upsc_scorer_bot" target="_blank" rel="noopener" class="text-xs text-muted hover:text-pri-600 hover:underline block">Questions? Message @upsc_scorer_bot on Telegram</a>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== FOOTER ==================== -->
+<footer class="border-t border-border py-6 text-center text-[10px] text-muted/50">
+  <p>Not affiliated with UPSC or any coaching institute.</p>
+  <p class="mt-0.5">GS-I: +2 correct, −2/3 wrong · CSAT: +2.5 correct, −2.5/3 wrong · Scores rounded to 2 decimals at display only.</p>
+</footer>
+
+<!-- ==================== JS ==================== -->
+<script>
+const SUPABASE_URL='YOUR_SUPABASE_URL';
+const SUPABASE_KEY='YOUR_SUPABASE_ANON_KEY';
+let _supa=null;
+try{if(SUPABASE_URL!=='YOUR_SUPABASE_URL'&&typeof supabase!=='undefined')_supa=supabase.createClient(SUPABASE_URL,SUPABASE_KEY)}catch(e){console.warn('Supabase init:',e)}
+
+const KEYS_2025_GS1={
+upsc_official:{display_name:"UPSC Official",is_official:true,accuracy_pct:100,answers:["C","D","B","B","B","C","A","A","A","A","C","A","B","A","B","C","C","D","C","C","C","D","A","D","C","C","A","B","C","C","C","D","C","B","B","B","B","B","B","B","C","B","C","C","B","C","C","D","D","B","C","C","B","A","C","B","D","D","D","A","D","A","A","B","A","A","D","C","C","D","B","C","B","A","C","D","A","A","C","D","B","B","A","B","A","A","C","D","D","A","C","D","C","D","C","B","C","A","C","B"]},
+vision_ias:{display_name:"Vision IAS",is_official:false,accuracy_pct:96,answers:["C","D","B","B","B","C","A","A","A","A","C","A","B","A","B","C","C","D","C","C","C","D","A","D","C","C","A","B","C","C","C","D","A","B","B","B","B","B","B","B","C","B","C","C","B","C","C","D","D","B","C","C","B","A","C","B","D","D","D","A","D","A","A","B","A","A","D","C","C","D","B","D","B","A","C","D","A","A","C","D","B","B","A","B","A","D","C","D","D","A","C","D","C","D","C","C","C","A","C","B"]},
+vajiram_ravi:{display_name:"Vajiram & Ravi",is_official:false,accuracy_pct:92,answers:["C","D","B","B","B","C","A","A","A","A","B","A","B","A","B","C","C","D","C","C","C","D","A","D","C","C","A","B","C","C","C","D","B","B","B","B","B","B","B","B","C","B","C","C","B","C","B","D","D","B","C","C","B","A","C","B","D","D","D","A","D","A","C","B","A","A","D","C","C","D","B","A","B","A","C","D","A","A","C","D","B","B","A","B","A","B","C","D","D","A","C","D","C","D","C","C","C","A","C","B"]},
+drishti_ias:{display_name:"Drishti IAS",is_official:false,accuracy_pct:95,answers:["C","D","B","B","B","C","A","A","A","A","C","A","B","A","B","C","C","D","C","C","C","D","A","D","C","C","A","B","C","C","C","A","B","B","B","B","B","B","B","B","C","B","C","C","B","C","C","D","C","B","C","C","B","A","C","B","D","D","D","A","D","D","A","B","A","A","D","C","C","D","B","C","B","A","C","D","A","A","C","D","B","C","A","B","A","A","C","D","D","A","C","D","C","D","C","B","C","A","C","B"]},
+forum_ias:{display_name:"Forum IAS",is_official:false,accuracy_pct:97,answers:["C","D","B","B","B","C","A","A","A","A","C","A","B","A","B","C","C","D","C","C","C","D","A","D","C","C","A","B","C","C","C","D","A","B","B","B","B","B","B","B","C","B","C","C","B","C","C","D","D","B","C","C","B","A","C","B","D","D","D","A","D","A","A","B","A","A","D","C","C","D","B","C","B","A","C","D","A","A","C","D","B","B","A","B","A","A","C","D","D","A","C","D","C","D","C","B","C","A","C","B"]},
+insights_ias:{display_name:"Insights IAS",is_official:false,accuracy_pct:93,answers:["C","D","B","B","B","C","A","A","A","A","C","A","B","A","B","C","C","D","C","C","C","D","A","D","C","C","A","B","C","C","C","D","B","B","B","B","B","B","B","B","C","B","C","C","B","C","C","D","C","B","C","C","B","A","C","B","D","D","D","A","D","A","A","B","A","A","D","C","C","D","B","D","B","A","C","D","A","A","C","D","B","B","A","B","A","D","C","D","D","A","C","D","C","D","C","C","C","A","C","B"]},
+next_ias:{display_name:"Next IAS",is_official:false,accuracy_pct:96,answers:["C","D","B","B","B","C","A","A","A","A","C","A","B","A","B","C","C","D","C","C","C","D","A","D","C","C","A","B","C","C","C","D","A","B","B","B","B","B","B","B","C","B","C","C","B","C","C","D","D","B","C","C","B","A","C","B","D","D","D","A","D","A","A","B","A","A","D","C","C","D","B","C","B","A","C","D","A","A","C","D","B","B","A","B","A","A","C","D","D","A","C","D","C","D","C","C","C","A","C","B"]},
+shankar_ias:{display_name:"Shankar IAS",is_official:false,accuracy_pct:94,answers:["C","D","B","B","B","C","A","A","A","A","C","A","B","A","B","C","C","D","C","C","C","D","A","D","C","C","A","B","C","C","C","D","A","B","B","B","B","B","B","B","C","B","C","C","B","C","C","D","D","B","C","C","B","A","C","B","D","D","D","A","D","A","A","B","A","A","D","C","C","D","B","C","B","A","C","D","A","A","C","D","B","B","A","B","A","A","C","D","D","A","C","D","C","D","C","B","C","A","C","B"]}
+};
+
+const SUBJECT_TAGS={"1":"environment","2":"economy","3":"polity","4":"history","5":"polity","6":"environment","7":"sci_tech","8":"economy","9":"history","10":"polity","11":"history","12":"geography","13":"economy","14":"polity","15":"environment","16":"sci_tech","17":"polity","18":"history","19":"current_affairs","20":"economy","21":"polity","22":"geography","23":"environment","24":"economy","25":"sci_tech","26":"history","27":"polity","28":"economy","29":"environment","30":"geography","31":"current_affairs","32":"environment","33":"history","34":"polity","35":"economy","36":"geography","37":"sci_tech","38":"economy","39":"polity","40":"history","41":"environment","42":"economy","43":"sci_tech","44":"polity","45":"geography","46":"current_affairs","47":"polity","48":"history","49":"environment","50":"economy","51":"sci_tech","52":"polity","53":"geography","54":"economy","55":"environment","56":"history","57":"current_affairs","58":"polity","59":"economy","60":"geography","61":"sci_tech","62":"environment","63":"history","64":"polity","65":"economy","66":"geography","67":"current_affairs","68":"sci_tech","69":"polity","70":"environment","71":"economy","72":"history","73":"geography","74":"polity","75":"sci_tech","76":"economy","77":"environment","78":"current_affairs","79":"polity","80":"geography","81":"economy","82":"environment","83":"history","84":"polity","85":"sci_tech","86":"history","87":"current_affairs","88":"economy","89":"geography","90":"polity","91":"environment","92":"sci_tech","93":"economy","94":"polity","95":"geography","96":"current_affairs","97":"history","98":"environment","99":"polity","100":"economy"};
+
+const CUTOFFS_2025={gen:92.66,ews:80.66,obc:79.33,sc:72.00,st:68.00,pwbd_gen:62.00,pwbd_obc:58.00,pwbd_sc:52.00,pwbd_st:48.00};
+
+function scorer(){return{
+  screen:1,
+  year:2025,paper:'gs1',setCode:'A',
+  currentPage:0,answers:{},
+  scores:[],
+  selectedCategory:'gen',
+  userEmail:'',
+  submitStatus:'', // '','saving','saved','error'
+  copied:false,
+
+  categories:[
+    {value:'gen',label:'General'},{value:'ews',label:'EWS'},
+    {value:'obc',label:'OBC'},{value:'sc',label:'SC'},
+    {value:'st',label:'ST'},{value:'pwbd_gen',label:'PwBD-Gen'},
+    {value:'pwbd_obc',label:'PwBD-OBC'},{value:'pwbd_sc',label:'PwBD-SC'},
+    {value:'pwbd_st',label:'PwBD-ST'}
+  ],
+
+  // Exact fraction arithmetic — never use decimals until display
+  get totalQs(){return this.paper==='gs1'?100:80},
+  get marksCorrect(){return this.paper==='gs1'?2:2.5},
+  get penalty(){return this.marksCorrect/3}, // exact: 2/3 or 2.5/3
+  get answeredCount(){return Object.values(this.answers).filter(v=>v!==null&&v!==undefined).length},
+  get keys(){return KEYS_2025_GS1},
+  get keyNames(){return Object.keys(this.keys)},
+  get totalKeys(){return this.keyNames.length},
+  get shareUrl(){return window.location.href},
+  get shareText(){return'I just checked my UPSC Prelims score across 8 coaching answer keys! Try it: '+this.shareUrl},
+
+  get pageRanges(){
+    const p=[],step=20;
+    for(let i=1;i<=this.totalQs;i+=step){const e=Math.min(i+step-1,this.totalQs);p.push({start:i,end:e,label:`${i}–${e}`})}
+    return p;
+  },
+  get currentPageQuestions(){
+    const p=this.pageRanges[this.currentPage];if(!p)return[];
+    const q=[];for(let i=p.start;i<=p.end;i++)q.push(i);return q;
+  },
+
+  startAnswering(){
+    if(!this.userEmail){alert('Please enter your email address.');return}
+    this.screen=2;window.scrollTo(0,0);
+  },
+
+  getAnswer(q){return this.answers[q]||null},
+  toggleAnswer(q,opt){this.answers[q]=this.answers[q]===opt?null:opt},
+  clearAnswer(q){this.answers[q]=null},
+  clearAll(){this.answers={}},
+  getSubject(q){return SUBJECT_TAGS[q]||''},
+  getCutoff(){return CUTOFFS_2025[this.selectedCategory]||92.66},
+
+  isDisputed(q){
+    const s=new Set();for(const k of this.keyNames){s.add(this.keys[k].answers[q-1])}return s.size>1;
+  },
+  getDisputeBreakdown(q){
+    const c={};for(const k of this.keyNames){const a=this.keys[k].answers[q-1];c[a]=(c[a]||0)+1}return c;
+  },
+
+  computeScore(keyName){
+    const key=this.keys[keyName];
+    let correct=0,wrong=0,skipped=0;
+    for(let q=1;q<=this.totalQs;q++){
+      const my=this.answers[q],ans=key.answers[q-1];
+      if(!my)skipped++;else if(my===ans)correct++;else wrong++;
+    }
+    // Exact arithmetic: marks = correct * marksCorrect - wrong * (marksCorrect/3)
+    const marks=(correct*this.marksCorrect)-(wrong*this.penalty);
+    return{source:keyName,display_name:key.display_name,is_official:key.is_official||false,accuracy_pct:key.accuracy_pct||null,correct,wrong,skipped,marks};
+  },
+
+  getConsensusAnswer(q){
+    const c={};for(const k of this.keyNames){const a=this.keys[k].answers[q-1];c[a]=(c[a]||0)+1}
+    return Object.entries(c).sort((a,b)=>b[1]-a[1])[0][0];
+  },
+
+  get sortedScores(){return[...this.scores].sort((a,b)=>a.is_official?-1:b.is_official?1:b.marks-a.marks)},
+
+  get scoreRange(){
+    if(!this.scores.length)return{min:0,max:0,consensus:0};
+    const m=this.scores.map(s=>s.marks);
+    let cc=0,cw=0;
+    for(let q=1;q<=this.totalQs;q++){
+      const modal=this.getConsensusAnswer(q),my=this.answers[q];
+      if(!my){}else if(my===modal)cc++;else cw++;
+    }
+    return{min:Math.min(...m),max:Math.max(...m),consensus:(cc*this.marksCorrect)-(cw*this.penalty)};
+  },
+
+  get subjectBreakdown(){
+    const s={};
+    for(let q=1;q<=this.totalQs;q++){
+      const subj=SUBJECT_TAGS[q]||'misc';
+      if(!s[subj])s[subj]={name:subj,correct:0,wrong:0,skipped:0,total:0};
+      s[subj].total++;
+      const modal=this.getConsensusAnswer(q),my=this.answers[q];
+      if(!my)s[subj].skipped++;else if(my===modal)s[subj].correct++;else s[subj].wrong++;
+    }
+    return Object.values(s).sort((a,b)=>b.total-a.total);
+  },
+
+  get disputedSwing(){
+    if(!this.scores.length)return 0;
+    return Math.max(...this.scores.map(s=>s.marks))-Math.min(...this.scores.map(s=>s.marks));
+  },
+
+  get disputedDetails(){
+    const d=[];
+    for(let q=1;q<=this.totalQs;q++){
+      if(!this.isDisputed(q))continue;
+      d.push({qid:q,yourAnswer:this.answers[q]||null,breakdown:this.getDisputeBreakdown(q)});
+    }
+    return d;
+  },
+
+  // ==================== SCORE + AUTO-SUBMIT ====================
+  async scoreAndSubmit(){
+    this.scores=this.keyNames.map(k=>this.computeScore(k));
+    this.screen=3;window.scrollTo(0,0);
+    // Auto-submit to Supabase
+    await this.submitToSupabase();
+  },
+
+  async submitToSupabase(){
+    if(!_supa){this.submitStatus='saved';return} // demo mode
+    this.submitStatus='saving';
+    const scoresObj={};
+    for(const s of this.scores)scoresObj[s.source]=parseFloat(s.marks.toFixed(2));
+    scoresObj.consensus=parseFloat(this.scoreRange.consensus.toFixed(2));
+
+    const answersArr=[];
+    for(let q=1;q<=this.totalQs;q++)answersArr.push(this.answers[q]||null);
+
+    // Get paper_id
+    let paperId=null;
+    try{
+      const{data}=await _supa.from('papers').select('id').eq('year',this.year).eq('paper_type',this.paper).single();
+      if(data)paperId=data.id;
+    }catch(e){}
+
+    const payload={
+      email:this.userEmail,
+      paper_id:paperId,
+      set_code:this.setCode,
+      category:this.selectedCategory,
+      answers_json:answersArr,
+      scores_json:scoresObj,
+      attempted:this.answeredCount
+    };
+
+    // Retry logic: 3 attempts, 2s delay
+    for(let attempt=1;attempt<=3;attempt++){
+      try{
+        const{error}=await _supa.from('submissions').insert(payload);
+        if(!error){this.submitStatus='saved';return}
+        if(attempt<3)await new Promise(r=>setTimeout(r,2000));
+      }catch(e){
+        if(attempt<3)await new Promise(r=>setTimeout(r,2000));
+      }
+    }
+    this.submitStatus='error';
+    // Queue for later retry
+    try{localStorage.setItem('pending_submission',JSON.stringify(payload))}catch(e){}
+  },
+
+  copyLink(){
+    navigator.clipboard.writeText(this.shareUrl).then(()=>{this.copied=true;setTimeout(()=>this.copied=false,2000)});
+  }
+}}
+</script>
+</body>
+</html>
